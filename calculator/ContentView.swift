@@ -5,14 +5,15 @@
 //  Created by Thanh Huy on 16/2/25.
 //
 
+import Combine
 import SwiftUI
 
 enum Currency: CaseIterable, Identifiable {
     case USD, EUR, GBP, JPY, AUD, CAD, CHF, CNY, SEK, NZD
-    case MXN, SGD, HKD, NOK, KRW, TRY, INR, RUB, BRL, ZAR,VND
-    
+    case MXN, SGD, HKD, NOK, KRW, TRY, INR, RUB, BRL, ZAR, VND
+
     var id: Self { self }  // Making it Identifiable
-    
+
     func getName() -> String {
         switch self {
         case .USD: return "US Dollar"
@@ -38,7 +39,7 @@ enum Currency: CaseIterable, Identifiable {
         case .VND: return "Vietnamese Dong"
         }
     }
-    
+
     func getCurrencySymbol() -> String {
         switch self {
         case .USD: return "$"
@@ -71,41 +72,87 @@ struct ContentView: View {
     @State private var selectedCurrency: Currency = Currency.USD
     @FocusState private var isFocus: Bool
     @State private var showPicker = false
-    
+    @State private var showCalculator = false
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Button(action: {
-                        showPicker = true
-                    }) {
+            GeometryReader { geometry in
+                Form {
+                    Section {
+                        Button(action: {
+                            showPicker = true
+                        }) {
+                            HStack {
+                                Text("Currency")
+                                Spacer()
+                                Text(selectedCurrency.getCurrencySymbol())
+                            }
+                        }
+                    }
+                    Section {
                         HStack {
-                            Text("Currency")
-                            Spacer()
                             Text(selectedCurrency.getCurrencySymbol())
+                            TextField("Amount", text: $currencyAmount)
+                                #if !os(macOS)
+                                    .keyboardType(.decimalPad)
+                                #endif
+                                .focused($isFocus).onReceive(
+                                    Just(currencyAmount)
+                                ) {
+                                    newValue in
+                                    let filtered = newValue.filter {
+                                        "0123456789".contains($0)
+                                    }
+                                    if filtered != newValue {
+                                        self.currencyAmount = filtered
+                                    }
+                                }
+                            GroupBox {
+                                Button(action: {
+                                    withAnimation(.none) {
+                                        showCalculator = true
+                                    }
+                                }) {
+                                    Image(systemName: "plus.forwardslash.minus")
+                                }.sheet(isPresented: $showCalculator) {
+                                    VStack {
+                                        #if os(macOS)
+                                            HStack {
+                                                Spacer()
+                                                Button(action: {
+                                                    showCalculator = false
+                                                }) {
+                                                    Text("Close")
+                                                }
+                                            }.padding()
+                                        #endif
+
+                                        Text("Welcome")
+
+                                    }
+                                    .presentationDetents([
+                                        .height(
+                                            0.7 * geometry.size.height)
+                                    ]).presentationDragIndicator(
+                                        Visibility.visible)
+
+                                }
+                            }
                         }
+
                     }
-                }
-                Section {
-                    HStack {
-                        Text(selectedCurrency.getCurrencySymbol())
-                        TextField("Amount", text: $currencyAmount).keyboardType(
-                            .decimalPad
-                        ).focused($isFocus)
-                    }
-                    
-                }
-            }.navigationTitle("Calculator")
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isFocus = false
+                }.navigationTitle("Calculator")
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                isFocus = false
+                            }
                         }
+                    }.navigationDestination(isPresented: $showPicker) {
+                        CurrencyPickerView(selectedCurrency: $selectedCurrency)
                     }
-                }.navigationDestination(isPresented: $showPicker) {
-                    CurrencyPickerView(selectedCurrency: $selectedCurrency)
-                }
+            }
         }
     }
 }
@@ -114,22 +161,21 @@ struct CurrencyPickerView: View {
     @Binding var selectedCurrency: Currency
     @State private var searchText: String = ""
     @Environment(\.dismiss) var dismiss
-    
+
     var filteredCurrencies: [Currency] {
         searchText.isEmpty
-        ? Currency.allCases
-        : Currency.allCases.filter {
-            String(describing: $0).lowercased().contains(
-                searchText.lowercased())
-        }
+            ? Currency.allCases
+            : Currency.allCases.filter {
+                String(describing: $0).lowercased().contains(
+                    searchText.lowercased())
+            }
     }
-    
+
     var body: some View {
         VStack {
             TextField("Search Currency", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .padding()
-            
             List {
                 ForEach(filteredCurrencies) { currency in
                     Button {
@@ -137,10 +183,12 @@ struct CurrencyPickerView: View {
                         dismiss()
                     } label: {
                         HStack {
-                            Text("\(currency.getName()) (\(currency.getCurrencySymbol()))")
+                            Text(
+                                "\(currency.getName()) (\(currency.getCurrencySymbol()))"
+                            )
                             Spacer()
                             if selectedCurrency == currency {
-                                Image(systemName: "checkmark")
+                                Image(systemName: "checkmark.circle")
                             }
                         }
                     }
